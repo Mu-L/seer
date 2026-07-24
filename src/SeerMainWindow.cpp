@@ -62,29 +62,47 @@ SeerMainWindow::SeerMainWindow(QWidget* parent) : QMainWindow(parent) {
 
     toolBar->addWidget(helpToolButton);
 
-    // Set up Styles menu.
-    _styleMenuActionGroup = new QActionGroup(this);
-    _styleMenuActionGroup->setExclusionPolicy(QActionGroup::ExclusionPolicy::Exclusive);
-    _styleMenuActionGroup->setEnabled(true);
-    _styleMenuActionGroup->setVisible(true);
+    // Set up ThemeStyle menu.
+    _themeStyleMenuActionGroup = new QActionGroup(this);
+    _themeStyleMenuActionGroup->setExclusionPolicy(QActionGroup::ExclusionPolicy::Exclusive);
+    _themeStyleMenuActionGroup->setEnabled(true);
+    _themeStyleMenuActionGroup->setVisible(true);
 
-    QAction* lightStyleAction = menuStyles->addAction("light");
+    QAction* lightStyleAction = menuThemeStyle->addAction("light");
     lightStyleAction->setCheckable(true);
-    _styleMenuActionGroup->addAction(lightStyleAction);
+    _themeStyleMenuActionGroup->addAction(lightStyleAction);
 
-    QAction* darkStyleAction = menuStyles->addAction("dark");
+    QAction* darkStyleAction = menuThemeStyle->addAction("dark");
     darkStyleAction->setCheckable(true);
-    _styleMenuActionGroup->addAction(darkStyleAction);
+    _themeStyleMenuActionGroup->addAction(darkStyleAction);
 
     QStringList styles = QStyleFactory::keys();
 
     for (int i = 0; i < styles.size(); i++) {
 
-        QAction* styleAction = menuStyles->addAction(styles.at(i));
+        QAction* styleAction = menuThemeStyle->addAction(styles.at(i));
         styleAction->setCheckable(true);
 
-        _styleMenuActionGroup->addAction(styleAction);
+        _themeStyleMenuActionGroup->addAction(styleAction);
     }
+
+    // Set up IconColor menu.
+    _iconColorMenuActionGroup = new QActionGroup(this);
+    _iconColorMenuActionGroup->setExclusionPolicy(QActionGroup::ExclusionPolicy::Exclusive);
+    _iconColorMenuActionGroup->setEnabled(true);
+    _iconColorMenuActionGroup->setVisible(true);
+
+    QAction* autoIconColorAction = menuIconColor->addAction("auto");
+    autoIconColorAction->setCheckable(true);
+    _iconColorMenuActionGroup->addAction(autoIconColorAction);
+
+    QAction* lightIconColorAction = menuIconColor->addAction("light");
+    lightIconColorAction->setCheckable(true);
+    _iconColorMenuActionGroup->addAction(lightIconColorAction);
+
+    QAction* darkIconColorAction = menuIconColor->addAction("dark");
+    darkIconColorAction->setCheckable(true);
+    _iconColorMenuActionGroup->addAction(darkIconColorAction);
 
     // Hide Nexti and Stepi. Enabled/disabled by SeerEditorManagerWidget.
     actionGdbNext->setVisible(true);
@@ -177,7 +195,8 @@ SeerMainWindow::SeerMainWindow(QWidget* parent) : QMainWindow(parent) {
     QObject::connect(actionGdbLaunch,                   &QAction::triggered,                            this,                           &SeerMainWindow::handleFileDebugWithOutDefaultProject);
     QObject::connect(actionGdbTerminate,                &QAction::triggered,                            this,                           &SeerMainWindow::handleTerminateExecutable);
     QObject::connect(actionGdbRestart,                  &QAction::triggered,                            this,                           &SeerMainWindow::handleRestartExecutable);
-    QObject::connect(_styleMenuActionGroup,             &QActionGroup::triggered,                       this,                           &SeerMainWindow::handleStyleMenuChanged);
+    QObject::connect(_themeStyleMenuActionGroup,        &QActionGroup::triggered,                       this,                           &SeerMainWindow::handleThemeStyleMenuChanged);
+    QObject::connect(_iconColorMenuActionGroup,         &QActionGroup::triggered,                       this,                           &SeerMainWindow::handleIconColorMenuChanged);
     QObject::connect(actionGdbContinue,                 &QAction::triggered,                            gdbWidget,                      &SeerGdbWidget::handleGdbContinue);
     QObject::connect(actionGdbNext,                     &QAction::triggered,                            gdbWidget,                      &SeerGdbWidget::handleGdbNext);
     QObject::connect(actionGdbStep,                     &QAction::triggered,                            gdbWidget,                      &SeerGdbWidget::handleGdbStep);
@@ -234,7 +253,7 @@ SeerMainWindow::SeerMainWindow(QWidget* parent) : QMainWindow(parent) {
 #endif
 
     // Colorize icons for theme.
-    Seer::colorizeAllIcons(this);
+    Seer::colorizeAllIcons(this, Seer::iconColorTheme());
 
     handleRecordSettingsChanged();
 
@@ -586,6 +605,17 @@ void SeerMainWindow::setStyleName (const QString& name) {
 
 const QString& SeerMainWindow::styleName () {
     return _styleName;
+}
+
+void SeerMainWindow::setIconColorTheme(const QString& mode) {
+
+    Seer::setIconColorTheme(mode);
+
+    handleThemeChanged(); // Will trigger the icon colorization.
+}
+
+const QString& SeerMainWindow::iconColorTheme () {
+    return Seer::iconColorTheme();
 }
 
 void SeerMainWindow::handleFileDebugWithDefaultProject () {
@@ -1027,15 +1057,26 @@ void SeerMainWindow::handleRestartExecutable () {
     }
 }
 
-void SeerMainWindow::handleStyleMenuChanged () {
+void SeerMainWindow::handleThemeStyleMenuChanged () {
 
-    QAction* action = _styleMenuActionGroup->checkedAction();
+    QAction* action = _themeStyleMenuActionGroup->checkedAction();
 
     if (action == 0) {
         return;
     }
 
     setStyleName(action->text());
+}
+
+void SeerMainWindow::handleIconColorMenuChanged () {
+
+    QAction* action = _iconColorMenuActionGroup->checkedAction();
+
+    if (action == 0) {
+        return;
+    }
+
+    setIconColorTheme(action->text());
 }
 
 void SeerMainWindow::handleShowMessage (QString message, int time) {
@@ -1703,6 +1744,7 @@ void SeerMainWindow::writeConfigSettings () {
 
     settings.beginGroup("mainwindow"); {
         settings.setValue("qtstyle", styleName());
+        settings.setValue("iconcolortheme", iconColorTheme());
     } settings.endGroup();
 
     settings.beginGroup("gdb"); {
@@ -1785,6 +1827,9 @@ void SeerMainWindow::readConfigSettings () {
     settings.beginGroup("mainwindow"); {
         if (settings.contains("qtstyle")) {
             setStyleName(settings.value("qtstyle").toString());
+        }
+        if (settings.contains("iconcolortheme")) {
+            setIconColorTheme(settings.value("iconcolortheme").toString());
         }
     } settings.endGroup();
 
@@ -2150,6 +2195,6 @@ void SeerMainWindow::handleGdbTargetInterrupt() {
 void SeerMainWindow::handleThemeChanged () {
 
     // Colorize icons for theme.
-    Seer::colorizeAllIcons(this);
+    Seer::colorizeAllIcons(this, Seer::iconColorTheme());
 }
 
