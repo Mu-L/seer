@@ -809,6 +809,7 @@ SeerParallelStacksPopupTableWidget::SeerParallelStacksPopupTableWidget(QWidget* 
     _table->verticalHeader()->setVisible(false);
     _table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     _table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    _table->setSelectionMode(QAbstractItemView::SingleSelection);
     _table->setFrameShape(QFrame::NoFrame); // outer QFrame provides the border
     _table->resizeColumnToContents(0);
     _table->resizeColumnToContents(1);
