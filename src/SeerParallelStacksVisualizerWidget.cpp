@@ -127,6 +127,11 @@ void SeerParallelStacksVisualizerWidget::refresh () {
     handleRefreshButton();
 }
 
+void SeerParallelStacksVisualizerWidget::handleThreadSelected (int threadId) {
+
+    graphicsView->setCurrentThreadId(threadId);
+}
+
 void SeerParallelStacksVisualizerWidget::handleText (const QString& text) {
 
     QApplication::setOverrideCursor(Qt::BusyCursor);

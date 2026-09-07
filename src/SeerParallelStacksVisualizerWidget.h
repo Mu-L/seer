@@ -35,6 +35,11 @@ class SeerParallelStacksVisualizerWidget : public QWidget, protected Ui::SeerPar
         void                        refresh                             ();
         void                        handleText                          (const QString& text);
 
+        // Another widget (e.g. the thread frames browser) selected a
+        // thread — reflect it in the graph without re-announcing it via
+        // selectedThread(), since that widget already told gdb itself.
+        void                        handleThreadSelected                (int threadId);
+
     protected slots:
         void                        handleRefreshButton                 ();
         void                        handleHelpButton                    ();

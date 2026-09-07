@@ -187,6 +187,9 @@ class SeerParallelStacksPopupTableWidget : public QFrame {
         explicit SeerParallelStacksPopupTableWidget(QWidget* parent = nullptr);
 
         void            addRow                          (int threadId, const QString& function);
+
+        // Sets which row (by threadId) shows the "current thread" highlight
+        // and restyles the rows already in the table to match.
         void            setCurrentThreadId              (int threadId);
 
     protected:
@@ -200,7 +203,12 @@ class SeerParallelStacksPopupTableWidget : public QFrame {
         void            handleSelectionChanged          ();
 
     private:
-        QTableWidget*   _table;
+        // Recolors every row's background: highlighted iff its threadId
+        // equals _currentThreadId. Called whenever a row is added or
+        // _currentThreadId changes.
+        void            refreshRowHighlights            ();
+
+        QTableWidget*   _table = nullptr;
         int             _currentThreadId;
 };
 
@@ -229,6 +237,13 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         // picked in a popup table. Read by a box when it opens its popup, so
         // the popup's own row highlighting matches the graph.
         int             currentThreadId                 () const;
+
+        // Restyles the graph to highlight threadId, without emitting
+        // selectedThread() — for a caller (e.g. some other widget's own
+        // thread selection) that already knows and doesn't need telling
+        // back. handleThreadSelected() is the popup-driven counterpart that
+        // does emit it.
+        void            setCurrentThreadId              (int threadId);
 
     signals:
         // Forwarded from whichever StackBoxItem's popup table had a row selected.

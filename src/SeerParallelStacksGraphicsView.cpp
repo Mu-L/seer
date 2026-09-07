@@ -859,22 +859,39 @@ void SeerParallelStacksPopupTableWidget::addRow (int threadId, const QString& fr
     item1->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     item1->setFlags(item1->flags()|Qt::ItemIsEditable);
 
-    if (threadId == _currentThreadId) {
-        const QColor highlight = boxColors().activeBackground;
-        item0->setBackground(highlight);
-        item1->setBackground(highlight);
-    }
-
     _table->setItem(nrows, 0, item0);
     _table->setItem(nrows, 1, item1);
 
     _table->resizeColumnToContents(0);
     _table->resizeColumnToContents(1);
+
+    refreshRowHighlights();
 }
 
 void SeerParallelStacksPopupTableWidget::setCurrentThreadId (int threadId) {
 
     _currentThreadId = threadId;
+
+    refreshRowHighlights();
+}
+
+void SeerParallelStacksPopupTableWidget::refreshRowHighlights () {
+
+    if (!_table) {
+        return;
+    }
+
+    const QBrush highlight(boxColors().activeBackground);
+
+    for (int row = 0; row < _table->rowCount(); ++row) {
+
+        int rowThreadId = _table->item(row, 0)->data(Qt::UserRole).toInt();
+
+        const QBrush background = (rowThreadId == _currentThreadId) ? highlight : QBrush();
+
+        _table->item(row, 0)->setBackground(background);
+        _table->item(row, 1)->setBackground(background);
+    }
 }
 
 void SeerParallelStacksPopupTableWidget::handleSelectionChanged () {
@@ -886,6 +903,8 @@ void SeerParallelStacksPopupTableWidget::handleSelectionChanged () {
     }
 
     int threadId = _table->item(selectedRows.first().row(), 0)->data(Qt::UserRole).toInt();
+
+    setCurrentThreadId(threadId);
 
     emit selectedThread(threadId);
 }
@@ -1499,11 +1518,16 @@ int SeerParallelStacksGraphicsView::currentThreadId() const {
     return _currentThreadId;
 }
 
-void SeerParallelStacksGraphicsView::handleThreadSelected(int threadId) {
+void SeerParallelStacksGraphicsView::setCurrentThreadId(int threadId) {
 
     _currentThreadId = threadId;
 
     applyCurrentThreadHighlight();
+}
+
+void SeerParallelStacksGraphicsView::handleThreadSelected(int threadId) {
+
+    setCurrentThreadId(threadId);
 
     emit selectedThread(threadId);
 }
