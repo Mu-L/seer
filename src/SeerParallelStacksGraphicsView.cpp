@@ -833,6 +833,12 @@ void SeerParallelStacksPopupTableWidget::addRow (int threadId, const QString& fr
     item1->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     item1->setFlags(item1->flags()|Qt::ItemIsEditable);
 
+    if (threadId == _currentThreadId) {
+        const QColor highlight = boxColors().activeBackground;
+        item0->setBackground(highlight);
+        item1->setBackground(highlight);
+    }
+
     _table->setItem(nrows, 0, item0);
     _table->setItem(nrows, 1, item1);
 
