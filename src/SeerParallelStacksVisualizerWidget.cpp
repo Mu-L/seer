@@ -38,14 +38,15 @@ SeerParallelStacksVisualizerWidget::SeerParallelStacksVisualizerWidget (QWidget*
     setAttribute(Qt::WA_DeleteOnClose);
 
     // Connect things.
-    QObject::connect(refreshToolButton,             &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleRefreshButton);
-    QObject::connect(helpToolButton,                &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleHelpButton);
-    QObject::connect(printToolButton,               &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handlePrintButton);
-    QObject::connect(saveToolButton,                &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleSaveButton);
-    QObject::connect(settingsToolButton,            &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleSettingsButton);
+    QObject::connect(refreshToolButton,             &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleRefreshButton);
+    QObject::connect(helpToolButton,                &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleHelpButton);
+    QObject::connect(printToolButton,               &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handlePrintButton);
+    QObject::connect(saveToolButton,                &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleSaveButton);
+    QObject::connect(settingsToolButton,            &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleSettingsButton);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 6, 3)
-    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,       this,  &SeerParallelStacksVisualizerWidget::handleThemeChanged);
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,                this,  &SeerParallelStacksVisualizerWidget::handleThemeChanged);
 #endif
+    QObject::connect(graphicsView,                  &SeerParallelStacksGraphicsView::selectedThread, this,  &SeerParallelStacksVisualizerWidget::selectedThread);
 
     // Colorize icons and the graph for theme.
     Seer::colorizeAllIcons(this, Seer::iconColorTheme());
@@ -120,6 +121,8 @@ const QString& SeerParallelStacksVisualizerWidget::showMinimapMode () const {
 }
 
 void SeerParallelStacksVisualizerWidget::refresh () {
+
+    qDebug() << "Refresh";
 
     handleRefreshButton();
 }

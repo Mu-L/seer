@@ -43,6 +43,10 @@ class SeerParallelStacksStackBoxItem : public QObject, public QGraphicsItem {
         QPointF                 sceneBottom             () const;
         QPointF                 sceneTop                () const;
 
+    signals:
+        // Forwarded from this box's popup table when a row is selected there.
+        void                    selectedThread          (int threadId);
+
     protected:
         QVariant                itemChange              (GraphicsItemChange change, const QVariant& value) override;
 
@@ -184,6 +188,10 @@ class SeerParallelStacksPopupTableWidget : public QFrame {
 
     signals:
         void            mouseLeftPopup                  ();
+        void            selectedThread                  (int threadId);
+
+    private slots:
+        void            handleSelectionChanged          ();
 
     private:
         QTableWidget*   _table;
@@ -209,6 +217,10 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         void            beginMiniMapDragScroll          ();
         void            updateDragScroll                (const QPoint& viewportPos);
         void            endDragScroll                   ();
+
+    signals:
+        // Forwarded from whichever StackBoxItem's popup table had a row selected.
+        void            selectedThread                  (int threadId);
 
     protected:
         void            wheelEvent                      (QWheelEvent* event) override;

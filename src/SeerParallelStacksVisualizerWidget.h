@@ -29,6 +29,7 @@ class SeerParallelStacksVisualizerWidget : public QWidget, protected Ui::SeerPar
 
     signals:
         void                        refreshParallelStackFrames          (int id);
+        void                        selectedThread                      (int threadId);
 
     public slots:
         void                        refresh                             ();

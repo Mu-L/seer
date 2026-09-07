@@ -426,6 +426,7 @@ void SeerParallelStacksStackBoxItem::handleShowPopup() {
     _popup->show();
 
     QObject::connect(_popup, &SeerParallelStacksPopupTableWidget::mouseLeftPopup, this, &SeerParallelStacksStackBoxItem::handleMaybeClosePopup);
+    QObject::connect(_popup, &SeerParallelStacksPopupTableWidget::selectedThread, this, &SeerParallelStacksStackBoxItem::selectedThread);
 }
 
 void SeerParallelStacksStackBoxItem::handleMaybeClosePopup() {
@@ -814,6 +815,8 @@ SeerParallelStacksPopupTableWidget::SeerParallelStacksPopupTableWidget(QWidget* 
     _table->resizeColumnToContents(0);
     _table->resizeColumnToContents(1);
 
+    QObject::connect(_table, &QTableWidget::itemSelectionChanged, this, &SeerParallelStacksPopupTableWidget::handleSelectionChanged);
+
     // Small padding between the outer frame border and the table itself
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -829,6 +832,7 @@ void SeerParallelStacksPopupTableWidget::addRow (int threadId, const QString& fr
     QTableWidgetItem* item0 = new QTableWidgetItem(QString::number(threadId));
     item0->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     item0->setFlags(item0->flags()|Qt::ItemIsEditable);
+    item0->setData(Qt::UserRole, threadId);
 
     QTableWidgetItem* item1 = new QTableWidgetItem(frame);
     item1->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -850,6 +854,19 @@ void SeerParallelStacksPopupTableWidget::addRow (int threadId, const QString& fr
 void SeerParallelStacksPopupTableWidget::setCurrentThreadId (int threadId) {
 
     _currentThreadId = threadId;
+}
+
+void SeerParallelStacksPopupTableWidget::handleSelectionChanged () {
+
+    const auto selectedRows = _table->selectionModel()->selectedRows();
+
+    if (selectedRows.isEmpty()) {
+        return;
+    }
+
+    int threadId = _table->item(selectedRows.first().row(), 0)->data(Qt::UserRole).toInt();
+
+    emit selectedThread(threadId);
 }
 
 void SeerParallelStacksPopupTableWidget::leaveEvent(QEvent* event) {
@@ -1356,6 +1373,8 @@ void SeerParallelStacksGraphicsView::buildPlacedTree(PlacedNode* pn, const SeerP
     if (!stack.frames.isEmpty()) {
         pn->item = new SeerParallelStacksStackBoxItem(stack, settings);
         _scene->addItem(pn->item);
+
+        QObject::connect(pn->item, &SeerParallelStacksStackBoxItem::selectedThread, this, &SeerParallelStacksGraphicsView::selectedThread);
     }
 
     for (const auto& child : stack.stacks) {
