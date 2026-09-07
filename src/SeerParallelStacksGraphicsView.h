@@ -43,6 +43,12 @@ class SeerParallelStacksStackBoxItem : public QObject, public QGraphicsItem {
         QPointF                 sceneBottom             () const;
         QPointF                 sceneTop                () const;
 
+        // Highlights this box iff its stack holds threadId (-1 clears it).
+        // This is THE current thread for the whole graph — either gdb's real
+        // current thread or one the user picked in a popup table — so there
+        // is only ever one highlight, not two independent ones.
+        void                    setHighlightedThreadId  (int threadId);
+
     signals:
         // Forwarded from this box's popup table when a row is selected there.
         void                    selectedThread          (int threadId);
@@ -78,7 +84,7 @@ class SeerParallelStacksStackBoxItem : public QObject, public QGraphicsItem {
         SeerParallelStacksStack                         _stack;
         QStringList                                     _frameRows;
         SeerParallelStacksSettings                      _settings;
-        bool                                            _isActiveStack  = false;  // holds the debugger's current thread
+        bool                                            _isActiveStack  = false;  // holds the graph's current thread
         QString                                         _headerLeft;
         QString                                         _headerRight;
         qreal                                           _width          = 0;
@@ -218,6 +224,12 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         void            updateDragScroll                (const QPoint& viewportPos);
         void            endDragScroll                   ();
 
+        // The thread currently highlighted across the whole graph — gdb's
+        // real current thread by default, or whichever one the user last
+        // picked in a popup table. Read by a box when it opens its popup, so
+        // the popup's own row highlighting matches the graph.
+        int             currentThreadId                 () const;
+
     signals:
         // Forwarded from whichever StackBoxItem's popup table had a row selected.
         void            selectedThread                  (int threadId);
@@ -242,6 +254,11 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         // Fires while a drag sits near a viewport edge: nudges the scrollbars
         // (and the dragged object) so it keeps following the cursor.
         void            handleAutoScrollTick            ();
+
+        // A thread was selected in some box's popup table. Makes it the
+        // graph's current thread, restyles every box that holds it, and
+        // forwards the selection on via the selectedThread signal.
+        void            handleThreadSelected            (int threadId);
 
     private:
         struct PlacedNode {
@@ -289,6 +306,12 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         // active (i.e. the scene doesn't fully fit in the viewport).
         void            updateMiniMapVisibility     ();
 
+        // Reapplies _currentThreadId's highlight to every box currently in
+        // the scene. Called after a setStack() rebuild and from
+        // handleThreadSelected() whenever the user selects a thread in a
+        // popup table.
+        void            applyCurrentThreadHighlight ();
+
         QGraphicsScene*                             _scene;
         SeerParallelStacksMiniMapWidget*            _miniMap;
         QString                                     _showMinimapMode = "Auto";
@@ -301,6 +324,8 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         QPoint                                      _autoScrollVelocity;        // px/tick, from cursor proximity to the edges
         bool                                        _nodeDragScroll    = false;
         bool                                        _miniMapDragScroll = false;
+
+        int                                         _currentThreadId   = -1;   // the graph's current thread; reset from gdb's real one on every setStack() refresh
 
         friend class SeerParallelStacksMiniMapWidget;    // needs sceneRect()/mapToScene()/centerOn() access
 };

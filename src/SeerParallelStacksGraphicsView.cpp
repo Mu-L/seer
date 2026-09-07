@@ -111,8 +111,8 @@ SeerParallelStacksStackBoxItem::SeerParallelStacksStackBoxItem(const SeerParalle
     _stack    = stack;
     _settings = settings;
 
-    // Highlight this box if it's the one holding the debugger's current thread.
-    _isActiveStack = _stack.threadIds.contains(_stack.currentThreadId);
+    // _isActiveStack starts false; the owning view sets it via
+    // setHighlightedThreadId() right after building the graph.
 
     // Precompute the frame rows to draw, honoring the stack-size setting.
     _frameRows = buildFrameRows();
@@ -288,6 +288,19 @@ QPointF SeerParallelStacksStackBoxItem::sceneTop() const {
     return mapToScene(QPointF(_width / 2.0, 0));
 }
 
+void SeerParallelStacksStackBoxItem::setHighlightedThreadId(int threadId) {
+
+    bool active = (threadId >= 0) && _stack.threadIds.contains(threadId);
+
+    if (active == _isActiveStack) {
+        return;
+    }
+
+    _isActiveStack = active;
+
+    update();
+}
+
 QVariant SeerParallelStacksStackBoxItem::itemChange(GraphicsItemChange change, const QVariant& value) {
 
     if (change == ItemPositionHasChanged) {
@@ -413,8 +426,16 @@ void SeerParallelStacksStackBoxItem::handleShowPopup() {
         frame = _stack.frames[0].functionOrAddr();
     }
 
+    // Match the graph's current highlighted thread rather than always gdb's
+    // real one, so the popup stays consistent with a prior user selection.
+    int currentThreadId = _stack.currentThreadId;
+
+    if (auto* v = viewOf(this)) {
+        currentThreadId = v->currentThreadId();
+    }
+
     _popup = new SeerParallelStacksPopupTableWidget();
-    _popup->setCurrentThreadId(_stack.currentThreadId);
+    _popup->setCurrentThreadId(currentThreadId);
 
     for (const auto& id : _threadIds) {
         _popup->addRow(id, frame);
@@ -1284,6 +1305,11 @@ void SeerParallelStacksGraphicsView::setStack(const SeerParallelStacksStack& roo
 
     endDragScroll();   // a rebuild invalidates any in-progress drag
 
+    // A refresh reflects gdb's current state, which any prior user selection
+    // may no longer match (that thread may be gone, or simply stale) — so
+    // fall back to gdb's own current thread rather than carrying it forward.
+    _currentThreadId = root.currentThreadId;
+
     _scene->clear();
 
     if (root.threadCount == 0) {
@@ -1333,6 +1359,9 @@ void SeerParallelStacksGraphicsView::setStack(const SeerParallelStacksStack& roo
     growSceneForMiniMap();
     updateMiniMapVisibility();
 
+    // Boxes start unhighlighted; apply the (freshly reset) current thread now.
+    applyCurrentThreadHighlight();
+
     if (_miniMap) _miniMap->refresh();
 }
 
@@ -1374,7 +1403,7 @@ void SeerParallelStacksGraphicsView::buildPlacedTree(PlacedNode* pn, const SeerP
         pn->item = new SeerParallelStacksStackBoxItem(stack, settings);
         _scene->addItem(pn->item);
 
-        QObject::connect(pn->item, &SeerParallelStacksStackBoxItem::selectedThread, this, &SeerParallelStacksGraphicsView::selectedThread);
+        QObject::connect(pn->item, &SeerParallelStacksStackBoxItem::selectedThread, this, &SeerParallelStacksGraphicsView::handleThreadSelected);
     }
 
     for (const auto& child : stack.stacks) {
@@ -1463,5 +1492,31 @@ void SeerParallelStacksGraphicsView::handleGrowSceneRectToFitItems() {
     }
 
     updateMiniMapVisibility();
+}
+
+int SeerParallelStacksGraphicsView::currentThreadId() const {
+
+    return _currentThreadId;
+}
+
+void SeerParallelStacksGraphicsView::handleThreadSelected(int threadId) {
+
+    _currentThreadId = threadId;
+
+    applyCurrentThreadHighlight();
+
+    emit selectedThread(threadId);
+}
+
+void SeerParallelStacksGraphicsView::applyCurrentThreadHighlight() {
+
+    // Highlight every box holding the current thread — including a shared
+    // ancestor (branch-point) box, since the thread genuinely does pass
+    // through it too.
+    for (QGraphicsItem* item : _scene->items()) {
+        if (auto* box = dynamic_cast<SeerParallelStacksStackBoxItem*>(item)) {
+            box->setHighlightedThreadId(_currentThreadId);
+        }
+    }
 }
 
