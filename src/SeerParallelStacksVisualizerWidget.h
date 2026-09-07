@@ -40,6 +40,12 @@ class SeerParallelStacksVisualizerWidget : public QWidget, protected Ui::SeerPar
         // selectedThread(), since that widget already told gdb itself.
         void                        handleThreadSelected                (int threadId);
 
+        // Another widget (e.g. the stack frames browser) selected a frame —
+        // reflect it in the graph the same way. The graph has no
+        // frame-selection UI of its own, so there's no outgoing signal to
+        // avoid re-announcing here.
+        void                        handleFrameSelected                 (int frameLevel);
+
     protected slots:
         void                        handleRefreshButton                 ();
         void                        handleHelpButton                    ();

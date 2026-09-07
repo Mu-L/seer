@@ -115,7 +115,7 @@ SeerParallelStacksStackBoxItem::SeerParallelStacksStackBoxItem(const SeerParalle
     // setHighlightedThreadId() right after building the graph.
 
     // Precompute the frame rows to draw, honoring the stack-size setting.
-    _frameRows = buildFrameRows();
+    buildFrameRows();
 
     // Text for BoxItem list of thread ids.
     if (_stack.threadIds.isEmpty() == false) {
@@ -146,11 +146,16 @@ SeerParallelStacksStackBoxItem::SeerParallelStacksStackBoxItem(const SeerParalle
     qreal headerW  = boldFm.horizontalAdvance(_headerLeft) + boldFm.horizontalAdvance(_headerRight) + _kHeaderGap;
     qreal maxTextW = headerW;
 
-    for (const auto& row : _frameRows) {
+    for (int i = 0; i < _frameRows.size(); ++i) {
+
+        const QString&      row = _frameRows[i];
+        const bool       isBold = (_frameRowLevels[i] == _stack.currentFrameLevel);
+        const QFontMetrics&  fm = isBold ? boldFm : normFm;
+
         if (_settings.showFullFunctionName) {
-            maxTextW = std::max(maxTextW, (qreal)normFm.horizontalAdvance(row));
+            maxTextW = std::max(maxTextW, (qreal)fm.horizontalAdvance(row));
         }else{
-            maxTextW = std::max(maxTextW, (qreal)normFm.horizontalAdvance(Seer::elideText(row, Qt::ElideMiddle, _settings.functionNameLength)));
+            maxTextW = std::max(maxTextW, (qreal)fm.horizontalAdvance(Seer::elideText(row, Qt::ElideMiddle, _settings.functionNameLength)));
         }
     }
 
@@ -158,9 +163,15 @@ SeerParallelStacksStackBoxItem::SeerParallelStacksStackBoxItem(const SeerParalle
     _height = _kPadY + _kRowH * (1 + (int)_frameRows.size()) + _kPadY;
 }
 
-QStringList SeerParallelStacksStackBoxItem::buildFrameRows() const {
+void SeerParallelStacksStackBoxItem::buildFrameRows() {
 
-    QStringList rows;
+    _frameRows.clear();
+    _frameRowLevels.clear();
+
+    auto appendFrame = [this](const SeerParallelStacksFrame& frame) {
+        _frameRows.append(frame.functionOrAddr());
+        _frameRowLevels.append(frame.level());
+    };
 
     const int frameCount = (int)_stack.frames.size();
 
@@ -169,10 +180,10 @@ QStringList SeerParallelStacksStackBoxItem::buildFrameRows() const {
     if (_settings.showFullStackSize || _settings.stackSize <= 0 || frameCount <= _settings.stackSize) {
 
         for (const auto& frame : _stack.frames) {
-            rows.append(frame.functionOrAddr());
+            appendFrame(frame);
         }
 
-        return rows;
+        return;
     }
 
     // Split the allowed frame count in half: top frames from the front,
@@ -182,16 +193,15 @@ QStringList SeerParallelStacksStackBoxItem::buildFrameRows() const {
     const int bottomCount = _settings.stackSize - topCount;
 
     for (int i = 0; i < topCount; ++i) {
-        rows.append(_stack.frames[i].functionOrAddr());
+        appendFrame(_stack.frames[i]);
     }
 
-    rows.append("[...]");
+    _frameRows.append("[...]");
+    _frameRowLevels.append(-1);
 
     for (int i = frameCount - bottomCount; i < frameCount; ++i) {
-        rows.append(_stack.frames[i].functionOrAddr());
+        appendFrame(_stack.frames[i]);
     }
-
-    return rows;
 }
 
 SeerParallelStacksStackBoxItem::~SeerParallelStacksStackBoxItem() {
@@ -243,10 +253,21 @@ void SeerParallelStacksStackBoxItem::paint(QPainter* painter, const QStyleOption
     painter->setPen(QPen(colors.divider, 1));
     painter->drawLine(QPointF(0, y), QPointF(_width, y));
 
-    painter->setFont(normFont);
     painter->setPen(colors.frameText);
 
-    for (const auto& row : _frameRows) {
+    for (int i = 0; i < _frameRows.size(); ++i) {
+
+        const QString& row = _frameRows[i];
+
+        // _highlightedFrameLevel is a single value shared by the whole tree,
+        // so gate it on _isActiveStack too — otherwise every box with a
+        // frame at that level (e.g. level 0, which nearly all of them have)
+        // would bold a row, not just the debugger's actual current
+        // thread/frame.
+        bool isCurrentFrame = _isActiveStack && _frameRowLevels[i] >= 0 && _frameRowLevels[i] == _highlightedFrameLevel;
+
+        painter->setFont(isCurrentFrame ? boldFont : normFont);
+
         if (_settings.showFullFunctionName) {
             painter->drawText(QRectF(_kPadX, y, innerW, _kRowH), Qt::AlignLeft | Qt::AlignVCenter, row);
         }else{
@@ -297,6 +318,17 @@ void SeerParallelStacksStackBoxItem::setHighlightedThreadId(int threadId) {
     }
 
     _isActiveStack = active;
+
+    update();
+}
+
+void SeerParallelStacksStackBoxItem::setHighlightedFrameLevel(int frameLevel) {
+
+    if (frameLevel == _highlightedFrameLevel) {
+        return;
+    }
+
+    _highlightedFrameLevel = frameLevel;
 
     update();
 }
@@ -1325,9 +1357,11 @@ void SeerParallelStacksGraphicsView::setStack(const SeerParallelStacksStack& roo
     endDragScroll();   // a rebuild invalidates any in-progress drag
 
     // A refresh reflects gdb's current state, which any prior user selection
-    // may no longer match (that thread may be gone, or simply stale) — so
-    // fall back to gdb's own current thread rather than carrying it forward.
-    _currentThreadId = root.currentThreadId;
+    // may no longer match (that thread/frame may be gone, or simply stale) —
+    // so fall back to gdb's own current thread/frame rather than carrying it
+    // forward.
+    _currentThreadId   = root.currentThreadId;
+    _currentFrameLevel = root.currentFrameLevel;
 
     _scene->clear();
 
@@ -1378,8 +1412,8 @@ void SeerParallelStacksGraphicsView::setStack(const SeerParallelStacksStack& roo
     growSceneForMiniMap();
     updateMiniMapVisibility();
 
-    // Boxes start unhighlighted; apply the (freshly reset) current thread now.
-    applyCurrentThreadHighlight();
+    // Boxes start unhighlighted; apply the (freshly reset) current thread/frame now.
+    applyCurrentHighlight();
 
     if (_miniMap) _miniMap->refresh();
 }
@@ -1522,7 +1556,14 @@ void SeerParallelStacksGraphicsView::setCurrentThreadId(int threadId) {
 
     _currentThreadId = threadId;
 
-    applyCurrentThreadHighlight();
+    applyCurrentHighlight();
+}
+
+void SeerParallelStacksGraphicsView::setCurrentFrameLevel(int frameLevel) {
+
+    _currentFrameLevel = frameLevel;
+
+    applyCurrentHighlight();
 }
 
 void SeerParallelStacksGraphicsView::handleThreadSelected(int threadId) {
@@ -1532,14 +1573,16 @@ void SeerParallelStacksGraphicsView::handleThreadSelected(int threadId) {
     emit selectedThread(threadId);
 }
 
-void SeerParallelStacksGraphicsView::applyCurrentThreadHighlight() {
+void SeerParallelStacksGraphicsView::applyCurrentHighlight() {
 
     // Highlight every box holding the current thread — including a shared
     // ancestor (branch-point) box, since the thread genuinely does pass
-    // through it too.
+    // through it too. Each box gates its own frame-level bolding on also
+    // being the active-thread box (see StackBoxItem::paint()).
     for (QGraphicsItem* item : _scene->items()) {
         if (auto* box = dynamic_cast<SeerParallelStacksStackBoxItem*>(item)) {
             box->setHighlightedThreadId(_currentThreadId);
+            box->setHighlightedFrameLevel(_currentFrameLevel);
         }
     }
 }

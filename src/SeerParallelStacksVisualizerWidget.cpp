@@ -132,6 +132,11 @@ void SeerParallelStacksVisualizerWidget::handleThreadSelected (int threadId) {
     graphicsView->setCurrentThreadId(threadId);
 }
 
+void SeerParallelStacksVisualizerWidget::handleFrameSelected (int frameLevel) {
+
+    graphicsView->setCurrentFrameLevel(frameLevel);
+}
+
 void SeerParallelStacksVisualizerWidget::handleText (const QString& text) {
 
     QApplication::setOverrideCursor(Qt::BusyCursor);
