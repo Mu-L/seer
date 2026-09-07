@@ -156,12 +156,14 @@ QString SeerParallelStacksThread::toString() const {
     return result;
 }
 
-static SeerParallelStacksNode buildImpl(const SeerParallelStacksThreads& threads, const SeerParallelStacksFrame& currentFrame, int depth) {
+static SeerParallelStacksNode buildImpl(const SeerParallelStacksThreads& threads, const SeerParallelStacksFrame& currentFrame, int depth, int currentThreadId, int currentFrameLevel) {
 
     SeerParallelStacksNode node;
-    node.depth    = depth;
-    node.function = currentFrame;
-    node.threads  = threads;
+    node.depth             = depth;
+    node.function          = currentFrame;
+    node.threads           = threads;
+    node.currentThreadId   = currentThreadId;
+    node.currentFrameLevel = currentFrameLevel;
 
     // Group threads by the function at position [-depth-1] (bottom-up).
     QMap<QString, SeerParallelStacksFrame>            functionFrames;
@@ -188,16 +190,16 @@ static SeerParallelStacksNode buildImpl(const SeerParallelStacksThreads& threads
     }
 
     for (auto it = functionThreads.begin(); it != functionThreads.end(); ++it) {
-        SeerParallelStacksNode child = buildImpl(it.value(), functionFrames[it.key()], depth + 1);
+        SeerParallelStacksNode child = buildImpl(it.value(), functionFrames[it.key()], depth + 1, currentThreadId, currentFrameLevel);
         node.children.append(child);
     }
 
     return node;
 }
 
-SeerParallelStacksNode SeerParallelStacksBuildParallelStacks(const SeerParallelStacksThreads& threads) {
+SeerParallelStacksNode SeerParallelStacksBuildParallelStacks(const SeerParallelStacksThreads& threads, int currentThreadId, int currentFrameLevel) {
 
-    return buildImpl(threads, SeerParallelStacksFrame(), 0);
+    return buildImpl(threads, SeerParallelStacksFrame(), 0, currentThreadId, currentFrameLevel);
 }
 
 // ---------------------------------------------------------------
@@ -220,10 +222,12 @@ SeerParallelStacksStack SeerParallelStacksFillStack(const SeerParallelStacksNode
         // this node, so their frames go first — the resulting list reads
         // top of stack (innermost) to bottom of stack (outermost).
         auto child = SeerParallelStacksFillStack(node.children[0]);
-        stack.frames       = child.frames;
-        stack.stacks       = child.stacks;
-        stack.threadCount  = child.threadCount;
-        stack.threadIds    = child.threadIds;
+        stack.frames            = child.frames;
+        stack.stacks            = child.stacks;
+        stack.threadCount       = child.threadCount;
+        stack.threadIds         = child.threadIds;
+        stack.currentThreadId   = child.currentThreadId;
+        stack.currentFrameLevel = child.currentFrameLevel;
 
         if (node.function.function().isEmpty() == false) {
             stack.frames.append(node.function);
@@ -236,6 +240,9 @@ SeerParallelStacksStack SeerParallelStacksFillStack(const SeerParallelStacksNode
         for (const auto& childNode : node.children) {
             stack.stacks.append(SeerParallelStacksFillStack(childNode));
         }
+
+        stack.currentThreadId   = node.currentThreadId;
+        stack.currentFrameLevel = node.currentFrameLevel;
     }
 
     return stack;

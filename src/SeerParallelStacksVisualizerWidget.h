@@ -52,6 +52,8 @@ class SeerParallelStacksVisualizerWidget : public QWidget, protected Ui::SeerPar
 
         int                         _id;
         SeerParallelStacksThreads   _threads;
+        int                         _currentThreadId;
+        int                         _currentFrameLevel;
         SeerParallelStacksSettings  _settings;
 };
 

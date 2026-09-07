@@ -74,6 +74,7 @@ class SeerParallelStacksStackBoxItem : public QObject, public QGraphicsItem {
         SeerParallelStacksStack                         _stack;
         QStringList                                     _frameRows;
         SeerParallelStacksSettings                      _settings;
+        bool                                            _isActiveStack  = false;  // holds the debugger's current thread
         QString                                         _headerLeft;
         QString                                         _headerRight;
         qreal                                           _width          = 0;
@@ -175,7 +176,8 @@ class SeerParallelStacksPopupTableWidget : public QFrame {
     public:
         explicit SeerParallelStacksPopupTableWidget(QWidget* parent = nullptr);
 
-        void            addRow                          (int threadid, const QString& function);
+        void            addRow                          (int threadId, const QString& function);
+        void            setCurrentThreadId              (int threadId);
 
     protected:
         void            leaveEvent                      (QEvent* event) override;
@@ -185,6 +187,7 @@ class SeerParallelStacksPopupTableWidget : public QFrame {
 
     private:
         QTableWidget*   _table;
+        int             _currentThreadId;
 };
 
 class SeerParallelStacksGraphicsView : public QGraphicsView {

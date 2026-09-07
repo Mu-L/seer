@@ -75,9 +75,11 @@ typedef QVector<SeerParallelStacksThread> SeerParallelStacksThreads;
 
 struct SeerParallelStacksNode {
     SeerParallelStacksFrame                     function;    // function().isEmpty() == root
-    int                                         depth  = 0;
+    int                                         depth             = 0;
     SeerParallelStacksThreads                   threads;
     QVector<SeerParallelStacksNode>             children;
+    int                                         currentThreadId   = -1;
+    int                                         currentFrameLevel = -1;
 };
 
 // Flat "Stack" representation used when building the graph.
@@ -85,6 +87,8 @@ struct SeerParallelStacksStack {
     int                                         threadCount = 0;
     QVector<int>                                threadIds;   // IDs of every thread in this node
     SeerParallelStacksFrames                    frames;
+    int                                         currentThreadId   = -1;
+    int                                         currentFrameLevel = -1;
 
     QVector<SeerParallelStacksStack>            stacks;
 };
@@ -97,6 +101,6 @@ struct SeerParallelStacksSettings {
     int      stackSize;
 };
 
-SeerParallelStacksNode    SeerParallelStacksBuildParallelStacks     (const SeerParallelStacksThreads& threads);   // Build the parallel-stacks tree from a flat list of threads.
+SeerParallelStacksNode    SeerParallelStacksBuildParallelStacks     (const SeerParallelStacksThreads& threads, int currentThreadId, int currentFrameLevel);   // Build the parallel-stacks tree from a flat list of threads.
 SeerParallelStacksStack   SeerParallelStacksFillStack               (const SeerParallelStacksNode& node);
 

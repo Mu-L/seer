@@ -159,6 +159,15 @@ void SeerParallelStacksVisualizerWidget::handleText (const QString& text) {
                 _threads.push_back(thread);
             }
 
+            QString current_thread_id_text   = Seer::parseFirst(text, "current_thread_id=",   '"', '"', false);
+            QString current_frame_level_text = Seer::parseFirst(text, "current_frame_level=", '"', '"', false);
+
+            _currentThreadId   = current_thread_id_text.toInt();
+            _currentFrameLevel = current_frame_level_text.toInt();
+
+            qDebug() << "CurrentThreadId"   << _currentThreadId;
+            qDebug() << "CurrentFrameLevel" << _currentFrameLevel;
+
             createDirectedGraph();
         }
 
@@ -367,7 +376,7 @@ void SeerParallelStacksVisualizerWidget::createDirectedGraph() {
     }
 
     // Build parallel-stacks tree
-    SeerParallelStacksNode  root  = SeerParallelStacksBuildParallelStacks(_threads);
+    SeerParallelStacksNode  root  = SeerParallelStacksBuildParallelStacks(_threads, _currentThreadId, _currentFrameLevel);
     SeerParallelStacksStack stack = SeerParallelStacksFillStack(root);
 
     graphicsView->setStack(stack, settings());

@@ -28,6 +28,7 @@ namespace {
 
     struct BoxColors {
         QColor background;
+        QColor activeBackground;
         QColor border;
         QColor headerText;
         QColor threadIdsText;
@@ -48,8 +49,8 @@ namespace {
 
     const BoxColors& boxColors () {
 
-        static const BoxColors light { QColor(0xFA, 0xFA, 0xFA), QColor(0x88, 0x88, 0x88), QColor(0x22, 0x22, 0x22), QColor(0x1A, 0x52, 0xA8), QColor(0xCC, 0xCC, 0xCC), QColor(0x00, 0x7A, 0x33), QColor(0x1A, 0x52, 0xA8) };
-        static const BoxColors dark  { QColor(0x3A, 0x3A, 0x3A), QColor(0x77, 0x77, 0x77), QColor(0xEE, 0xEE, 0xEE), QColor(0x6F, 0xA8, 0xF0), QColor(0x5A, 0x5A, 0x5A), QColor(0x4C, 0xD9, 0x87), QColor(0x6F, 0xA8, 0xF0) };
+        static const BoxColors light { QColor(0xFA, 0xFA, 0xFA), QColor(0xFF, 0xF3, 0xC4), QColor(0x88, 0x88, 0x88), QColor(0x22, 0x22, 0x22), QColor(0x1A, 0x52, 0xA8), QColor(0xCC, 0xCC, 0xCC), QColor(0x00, 0x7A, 0x33), QColor(0x1A, 0x52, 0xA8) };
+        static const BoxColors dark  { QColor(0x3A, 0x3A, 0x3A), QColor(0x5A, 0x4A, 0x1A), QColor(0x77, 0x77, 0x77), QColor(0xEE, 0xEE, 0xEE), QColor(0x6F, 0xA8, 0xF0), QColor(0x5A, 0x5A, 0x5A), QColor(0x4C, 0xD9, 0x87), QColor(0x6F, 0xA8, 0xF0) };
 
         return g_darkTheme ? dark : light;
     }
@@ -104,11 +105,14 @@ SeerParallelStacksStackBoxItem::SeerParallelStacksStackBoxItem(const SeerParalle
 
     QObject::connect(_hoverTimer, &QTimer::timeout, this, &SeerParallelStacksStackBoxItem::handleShowPopup);
 
-    _headerLeft = QString("%1 Thread%2") .arg(stack.threadCount) .arg(stack.threadCount == 1 ? "" : "s");
+    _headerLeft = QString("%1 Thread%2").arg(stack.threadCount).arg(stack.threadCount == 1 ? "" : "s");
 
     _threadIds.resize(0);
     _stack    = stack;
     _settings = settings;
+
+    // Highlight this box if it's the one holding the debugger's current thread.
+    _isActiveStack = _stack.threadIds.contains(_stack.currentThreadId);
 
     // Precompute the frame rows to draw, honoring the stack-size setting.
     _frameRows = buildFrameRows();
@@ -216,7 +220,7 @@ void SeerParallelStacksStackBoxItem::paint(QPainter* painter, const QStyleOption
 
     const BoxColors& colors = boxColors();
 
-    painter->setBrush(colors.background);
+    painter->setBrush(_isActiveStack ? colors.activeBackground : colors.background);
     painter->setPen(QPen(colors.border, 1.5));
     painter->drawRoundedRect(boundingRect(), 6, 6);
 
@@ -410,6 +414,7 @@ void SeerParallelStacksStackBoxItem::handleShowPopup() {
     }
 
     _popup = new SeerParallelStacksPopupTableWidget();
+    _popup->setCurrentThreadId(_stack.currentThreadId);
 
     for (const auto& id : _threadIds) {
         _popup->addRow(id, frame);
@@ -774,6 +779,7 @@ SeerParallelStacksPopupTableWidget::SeerParallelStacksPopupTableWidget(QWidget* 
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
 
     // Visible frame around the table
+    setCurrentThreadId(0);
     setFrameShape(QFrame::Box);
     setFrameShadow(QFrame::Plain);
     setLineWidth(1);
@@ -813,13 +819,13 @@ SeerParallelStacksPopupTableWidget::SeerParallelStacksPopupTableWidget(QWidget* 
     layout->addWidget(_table);
 }
 
-void SeerParallelStacksPopupTableWidget::addRow (int threadid, const QString& frame) {
+void SeerParallelStacksPopupTableWidget::addRow (int threadId, const QString& frame) {
 
     int nrows = _table->rowCount();
 
     _table->setRowCount(nrows+1);
 
-    QTableWidgetItem* item0 = new QTableWidgetItem(QString::number(threadid));
+    QTableWidgetItem* item0 = new QTableWidgetItem(QString::number(threadId));
     item0->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     item0->setFlags(item0->flags()|Qt::ItemIsEditable);
 
@@ -832,6 +838,11 @@ void SeerParallelStacksPopupTableWidget::addRow (int threadid, const QString& fr
 
     _table->resizeColumnToContents(0);
     _table->resizeColumnToContents(1);
+}
+
+void SeerParallelStacksPopupTableWidget::setCurrentThreadId (int threadId) {
+
+    _currentThreadId = threadId;
 }
 
 void SeerParallelStacksPopupTableWidget::leaveEvent(QEvent* event) {
