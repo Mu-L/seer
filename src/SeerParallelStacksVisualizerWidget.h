@@ -35,16 +35,27 @@ class SeerParallelStacksVisualizerWidget : public QWidget, protected Ui::SeerPar
         void                        refresh                             ();
         void                        handleText                          (const QString& text);
 
+        // Highlights threadId/frameLevel in the already-built graph — the
+        // counterpart to createDirectedGraph(), which only builds and
+        // deliberately leaves highlighting alone. Called internally right
+        // after every createDirectedGraph() call (using _currentThreadId/
+        // _currentFrameLevel), and exposed as a slot so another widget could
+        // drive it directly if it ever has both values to give at once.
+        void                        highlightDirectedGraph              (int threadId, int frameLevel);
+
         // Another widget (e.g. the thread frames browser) selected a
         // thread — reflect it in the graph without re-announcing it via
-        // selectedThread(), since that widget already told gdb itself.
-        void                        handleThreadSelected                (int threadId);
+        // selectedThread(), since that widget already told gdb itself. Just
+        // a thin wrapper around highlightDirectedGraph() using the
+        // last-known frame level, since this signal only carries a thread id.
+        void                        highlightSelectedThread             (int threadId);
 
         // Another widget (e.g. the stack frames browser) selected a frame —
         // reflect it in the graph the same way. The graph has no
         // frame-selection UI of its own, so there's no outgoing signal to
-        // avoid re-announcing here.
-        void                        handleFrameSelected                 (int frameLevel);
+        // avoid re-announcing here. A thin wrapper around
+        // highlightDirectedGraph() using the last-known thread id.
+        void                        highlightSelectedFrame              (int frameLevel);
 
     protected slots:
         void                        handleRefreshButton                 ();

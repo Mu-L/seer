@@ -3083,8 +3083,8 @@ void SeerGdbWidget::handleGdbParallelStacksVisualizer () {
     QObject::connect(_gdbMonitor,                                       &GdbMonitor::caretTextOutput,                                          w,       &SeerParallelStacksVisualizerWidget::handleText);
     QObject::connect(w,                                                 &SeerParallelStacksVisualizerWidget::refreshParallelStackFrames,       this,    &SeerGdbWidget::handleGdbParallelStackFrames);
     QObject::connect(w,                                                 &SeerParallelStacksVisualizerWidget::selectedThread,                   this,    &SeerGdbWidget::handleGdbThreadSelectId);
-    QObject::connect(threadManagerWidget->threadFramesBrowserWidget(),  &SeerThreadFramesBrowserWidget::selectedThread,                        w,       &SeerParallelStacksVisualizerWidget::handleThreadSelected);
-    QObject::connect(stackManagerWidget->stackFramesBrowserWidget(),    &SeerStackFramesBrowserWidget::selectedFrame,                          w,       &SeerParallelStacksVisualizerWidget::handleFrameSelected);
+    QObject::connect(threadManagerWidget->threadFramesBrowserWidget(),  &SeerThreadFramesBrowserWidget::selectedThread,                        w,       &SeerParallelStacksVisualizerWidget::highlightSelectedThread);
+    QObject::connect(stackManagerWidget->stackFramesBrowserWidget(),    &SeerStackFramesBrowserWidget::selectedFrame,                          w,       &SeerParallelStacksVisualizerWidget::highlightSelectedFrame);
 
     // Force a inital refresh.
     w->refresh();
