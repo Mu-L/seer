@@ -38,14 +38,16 @@ SeerParallelStacksVisualizerWidget::SeerParallelStacksVisualizerWidget (QWidget*
     setAttribute(Qt::WA_DeleteOnClose);
 
     // Connect things.
-    QObject::connect(refreshToolButton,             &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleRefreshButton);
-    QObject::connect(helpToolButton,                &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleHelpButton);
-    QObject::connect(printToolButton,               &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handlePrintButton);
-    QObject::connect(saveToolButton,                &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleSaveButton);
-    QObject::connect(settingsToolButton,            &QToolButton::clicked,                  this,  &SeerParallelStacksVisualizerWidget::handleSettingsButton);
+    QObject::connect(refreshToolButton,             &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleRefreshButton);
+    QObject::connect(helpToolButton,                &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleHelpButton);
+    QObject::connect(printToolButton,               &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handlePrintButton);
+    QObject::connect(saveToolButton,                &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleSaveButton);
+    QObject::connect(settingsToolButton,            &QToolButton::clicked,                           this,  &SeerParallelStacksVisualizerWidget::handleSettingsButton);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 6, 3)
-    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,       this,  &SeerParallelStacksVisualizerWidget::handleThemeChanged);
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,                this,  &SeerParallelStacksVisualizerWidget::handleThemeChanged);
 #endif
+    QObject::connect(graphicsView,                  &SeerParallelStacksGraphicsView::selectedThread, this,  &SeerParallelStacksVisualizerWidget::selectedThread);
+    QObject::connect(autoRefreshCheckBox,           &QCheckBox::toggled,                             this,  &SeerParallelStacksVisualizerWidget::writeSettings);
 
     // Colorize icons and the graph for theme.
     Seer::colorizeAllIcons(this, Seer::iconColorTheme());
@@ -82,6 +84,7 @@ void SeerParallelStacksVisualizerWidget::setShowFullFunctionName (bool flag) {
 
     // Redraw scene with new settings.
     createDirectedGraph();
+    highlightDirectedGraph(_currentThreadId, _currentFrameLevel);
 }
 
 bool SeerParallelStacksVisualizerWidget::showFullFunctionName () const {
@@ -97,6 +100,7 @@ void SeerParallelStacksVisualizerWidget::setFunctionNameLength (int length) {
 
     // Redraw scene with new settings.
     createDirectedGraph();
+    highlightDirectedGraph(_currentThreadId, _currentFrameLevel);
 }
 
 int SeerParallelStacksVisualizerWidget::functionNameLength () const {
@@ -112,6 +116,7 @@ void SeerParallelStacksVisualizerWidget::setShowMinimapMode (const QString& mode
 
     // Redraw scene with new settings.
     createDirectedGraph();
+    highlightDirectedGraph(_currentThreadId, _currentFrameLevel);
 }
 
 const QString& SeerParallelStacksVisualizerWidget::showMinimapMode () const {
@@ -122,6 +127,41 @@ const QString& SeerParallelStacksVisualizerWidget::showMinimapMode () const {
 void SeerParallelStacksVisualizerWidget::refresh () {
 
     handleRefreshButton();
+}
+
+void SeerParallelStacksVisualizerWidget::highlightDirectedGraph (int threadId, int frameLevel) {
+
+    // frameLevel is relative to threadId's own numbering. Convert it to a
+    // depth-from-bottom value using that thread's own frame count, since
+    // that's what the graph's boxes compare against (see
+    // SeerParallelStacksFrame::depth()) — a raw level is only meaningful
+    // relative to the thread it came from. depth() starts at 1 for the
+    // outermost frame, so the conversion is frameCount - level, not
+    // frameCount - 1 - level.
+    int frameDepth = -1;
+
+    for (const auto& t : _threads) {
+        if (t.id() == threadId) {
+            frameDepth = t.frameCount() - frameLevel;
+            break;
+        }
+    }
+
+    graphicsView->setCurrentHighlight(threadId, frameDepth);
+}
+
+void SeerParallelStacksVisualizerWidget::highlightSelectedThread (int threadId) {
+
+    _currentThreadId = threadId;
+
+    highlightDirectedGraph(threadId, _currentFrameLevel);
+}
+
+void SeerParallelStacksVisualizerWidget::highlightSelectedFrame (int frameLevel) {
+
+    _currentFrameLevel = frameLevel;
+
+    highlightDirectedGraph(_currentThreadId, frameLevel);
 }
 
 void SeerParallelStacksVisualizerWidget::handleText (const QString& text) {
@@ -159,7 +199,14 @@ void SeerParallelStacksVisualizerWidget::handleText (const QString& text) {
                 _threads.push_back(thread);
             }
 
+            QString current_thread_id_text   = Seer::parseFirst(text, "current_thread_id=",   '"', '"', false);
+            QString current_frame_level_text = Seer::parseFirst(text, "current_frame_level=", '"', '"', false);
+
+            _currentThreadId   = current_thread_id_text.toInt();
+            _currentFrameLevel = current_frame_level_text.toInt();
+
             createDirectedGraph();
+            highlightDirectedGraph(_currentThreadId, _currentFrameLevel);
         }
 
     }else if (text.startsWith("^error,msg=\"No registers.\"")) {
@@ -308,6 +355,7 @@ void SeerParallelStacksVisualizerWidget::handleSettingsButton () {
 
         // Redraw scene with new settings.
         createDirectedGraph();
+        highlightDirectedGraph(_currentThreadId, _currentFrameLevel);
     }
 }
 
@@ -332,6 +380,7 @@ void SeerParallelStacksVisualizerWidget::writeSettings() {
         settings.setValue("showfullstacksize",    _settings.showFullStackSize);
         settings.setValue("stacksize",            _settings.stackSize);
         settings.setValue("showminimapmode",      _settings.showMinimapMode);
+        settings.setValue("autorefresh",          autoRefreshCheckBox->isChecked());
     } settings.endGroup();
 }
 
@@ -348,6 +397,8 @@ void SeerParallelStacksVisualizerWidget::readSettings() {
         _settings.showFullStackSize    = settings.value("showfullstacksize", true).toBool();
         _settings.stackSize            = settings.value("stacksize", 20).toInt();
         _settings.showMinimapMode      = settings.value("showminimapmode", "Auto").toString();
+
+        autoRefreshCheckBox->setChecked(settings.value("autorefresh", false).toBool());
 
     } settings.endGroup();
 }
@@ -366,7 +417,8 @@ void SeerParallelStacksVisualizerWidget::createDirectedGraph() {
         scene->clear();
     }
 
-    // Build parallel-stacks tree
+    // Build parallel-stacks tree. Purely structural — no highlighting here;
+    // see highlightDirectedGraph().
     SeerParallelStacksNode  root  = SeerParallelStacksBuildParallelStacks(_threads);
     SeerParallelStacksStack stack = SeerParallelStacksFillStack(root);
 

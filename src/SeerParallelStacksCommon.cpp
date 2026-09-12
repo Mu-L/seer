@@ -35,6 +35,14 @@ int SeerParallelStacksFrame::level () const {
     return _level;
 }
 
+int SeerParallelStacksFrame::depth () const {
+    return _depth;
+}
+
+void SeerParallelStacksFrame::setDepth (int depth) {
+    _depth = depth;
+}
+
 const QString& SeerParallelStacksFrame::addr () const {
     return _addr;
 }
@@ -188,7 +196,19 @@ static SeerParallelStacksNode buildImpl(const SeerParallelStacksThreads& threads
     }
 
     for (auto it = functionThreads.begin(); it != functionThreads.end(); ++it) {
-        SeerParallelStacksNode child = buildImpl(it.value(), functionFrames[it.key()], depth + 1);
+
+        // Tag the representative frame with the CHILD's own depth (depth+1)
+        // rather than trusting whichever thread it happened to come from:
+        // depth-from-bottom is the same for every thread sharing this
+        // call-tree position (that's the invariant the grouping above
+        // relies on), so it stays correct however "current" is later
+        // redefined by an interactive thread/frame selection — unlike
+        // level(), which is only meaningful relative to whichever thread
+        // this particular frame was sampled from.
+        SeerParallelStacksFrame repFrame = functionFrames[it.key()];
+        repFrame.setDepth(depth + 1);
+
+        SeerParallelStacksNode child = buildImpl(it.value(), repFrame, depth + 1);
         node.children.append(child);
     }
 
@@ -220,10 +240,10 @@ SeerParallelStacksStack SeerParallelStacksFillStack(const SeerParallelStacksNode
         // this node, so their frames go first — the resulting list reads
         // top of stack (innermost) to bottom of stack (outermost).
         auto child = SeerParallelStacksFillStack(node.children[0]);
-        stack.frames       = child.frames;
-        stack.stacks       = child.stacks;
-        stack.threadCount  = child.threadCount;
-        stack.threadIds    = child.threadIds;
+        stack.frames      = child.frames;
+        stack.stacks      = child.stacks;
+        stack.threadCount = child.threadCount;
+        stack.threadIds   = child.threadIds;
 
         if (node.function.function().isEmpty() == false) {
             stack.frames.append(node.function);

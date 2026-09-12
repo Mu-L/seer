@@ -28,6 +28,17 @@ class SeerParallelStacksFrame {
         const QString&      type            () const;
         QString             toString        () const;
 
+        // Distance from the bottom (outermost/root) frame of whichever
+        // thread this frame was sampled from — unlike level() (that
+        // thread's own absolute numbering, which varies with how many
+        // frames that thread has below this point), depth() is the same
+        // for every thread sharing this call-tree position, since it's set
+        // from the tree's own recursion depth, not from any one thread's
+        // frame count. Set by SeerParallelStacksCommon.cpp while building
+        // the tree; -1 until then.
+        int                 depth           () const;
+        void                setDepth        (int depth);
+
     private:
         int                 _level;
         QString             _addr;
@@ -38,6 +49,7 @@ class SeerParallelStacksFrame {
         QString             _fullname;
         int                 _line;
         QString             _type;
+        int                 _depth = -1;
 };
 
 typedef QVector<SeerParallelStacksFrame> SeerParallelStacksFrames;
@@ -75,12 +87,15 @@ typedef QVector<SeerParallelStacksThread> SeerParallelStacksThreads;
 
 struct SeerParallelStacksNode {
     SeerParallelStacksFrame                     function;    // function().isEmpty() == root
-    int                                         depth  = 0;
+    int                                         depth             = 0;
     SeerParallelStacksThreads                   threads;
     QVector<SeerParallelStacksNode>             children;
 };
 
-// Flat "Stack" representation used when building the graph.
+// Flat "Stack" representation used when building the graph. Purely
+// structural — which thread/frame is "current" is a separate, dynamic
+// concern applied afterward (see SeerParallelStacksGraphicsView::
+// setCurrentThreadId()/setCurrentFrameDepth()), not baked in here.
 struct SeerParallelStacksStack {
     int                                         threadCount = 0;
     QVector<int>                                threadIds;   // IDs of every thread in this node

@@ -43,6 +43,26 @@ class SeerParallelStacksStackBoxItem : public QObject, public QGraphicsItem {
         QPointF                 sceneBottom             () const;
         QPointF                 sceneTop                () const;
 
+        // Highlights this box iff its stack holds threadId (-1 clears it).
+        // This is THE current thread for the whole graph — either gdb's real
+        // current thread or one the user picked in a popup table — so there
+        // is only ever one highlight, not two independent ones.
+        void                    setHighlightedThreadId  (int threadId);
+
+        // Sets which frame depth to bold (-1 clears it) — depth-from-bottom
+        // (SeerParallelStacksFrame::depth()), not the thread-relative
+        // level() number, so this stays correct no matter which thread the
+        // caller means by "current" (see SeerParallelStacksCommon.cpp).
+        // Only takes visible effect when this box is also the active-thread
+        // box (see paint()) — depth is a single value shared by the whole
+        // tree, so without that gate nearly every box would bold a
+        // same-depth row.
+        void                    setHighlightedFrameDepth (int frameDepth);
+
+    signals:
+        // Forwarded from this box's popup table when a row is selected there.
+        void                    selectedThread          (int threadId);
+
     protected:
         QVariant                itemChange              (GraphicsItemChange change, const QVariant& value) override;
 
@@ -62,18 +82,22 @@ class SeerParallelStacksStackBoxItem : public QObject, public QGraphicsItem {
         // cursor is still over the node.
         QRect                   globalRect              () const;
 
-        // Build the list of frame-row texts to draw. Honors the
-        // showFullStackSize / stackSize settings: when the full stack is
-        // hidden, only the top and bottom stackSize frames are shown and the
-        // removed middle ones are replaced by a single "[...]" row. The
-        // underlying _stack.frames is left untouched.
-        QStringList             buildFrameRows          () const;
+        // Fills _frameRows (and the parallel _frameRowDepths) with the
+        // frame-row texts to draw. Honors the showFullStackSize / stackSize
+        // settings: when the full stack is hidden, only the top and bottom
+        // stackSize frames are shown and the removed middle ones are
+        // replaced by a single "[...]" row. The underlying _stack.frames is
+        // left untouched.
+        void                    buildFrameRows          ();
 
         QVector<SeerParallelStacksLiveEdge*>            _edges;   // non-owning
         QVector<int>                                    _threadIds;
         SeerParallelStacksStack                         _stack;
         QStringList                                     _frameRows;
+        QVector<int>                                    _frameRowDepths;    // parallel to _frameRows; each row's frame depth() (-1 for a "[...]" placeholder row)
         SeerParallelStacksSettings                      _settings;
+        bool                                            _isActiveStack  = false;  // holds the graph's current thread
+        int                                             _highlightedFrameDepth = -1;  // bolded iff _isActiveStack is also true
         QString                                         _headerLeft;
         QString                                         _headerRight;
         qreal                                           _width          = 0;
@@ -175,16 +199,30 @@ class SeerParallelStacksPopupTableWidget : public QFrame {
     public:
         explicit SeerParallelStacksPopupTableWidget(QWidget* parent = nullptr);
 
-        void            addRow                          (int threadid, const QString& function);
+        void            addRow                          (int threadId, const QString& function);
+
+        // Sets which row (by threadId) shows the "current thread" highlight
+        // and restyles the rows already in the table to match.
+        void            setCurrentThreadId              (int threadId);
 
     protected:
         void            leaveEvent                      (QEvent* event) override;
 
     signals:
         void            mouseLeftPopup                  ();
+        void            selectedThread                  (int threadId);
+
+    private slots:
+        void            handleSelectionChanged          ();
 
     private:
-        QTableWidget*   _table;
+        // Recolors every row's background: highlighted iff its threadId
+        // equals _currentThreadId. Called whenever a row is added or
+        // _currentThreadId changes.
+        void            refreshRowHighlights            ();
+
+        QTableWidget*   _table = nullptr;
+        int             _currentThreadId;
 };
 
 class SeerParallelStacksGraphicsView : public QGraphicsView {
@@ -207,6 +245,39 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         void            updateDragScroll                (const QPoint& viewportPos);
         void            endDragScroll                   ();
 
+        // The thread currently highlighted across the whole graph — gdb's
+        // real current thread by default, or whichever one the user last
+        // picked in a popup table. Read by a box when it opens its popup, so
+        // the popup's own row highlighting matches the graph.
+        int             currentThreadId                 () const;
+
+        // Restyles the graph to highlight threadId, without emitting
+        // selectedThread() — for a caller (e.g. some other widget's own
+        // thread selection) that already knows and doesn't need telling
+        // back. handleThreadSelected() is the popup-driven counterpart that
+        // does emit it.
+        void            setCurrentThreadId              (int threadId);
+
+        // Restyles the graph's frame bolding to frameDepth — a depth-from-
+        // bottom value (SeerParallelStacksFrame::depth()), not a raw
+        // thread-relative frame level; the caller (e.g.
+        // SeerParallelStacksVisualizerWidget::handleFrameSelected(), for a
+        // frame picked in the external stack frames browser) is responsible
+        // for converting a level to a depth using that thread's own frame
+        // count, since only it knows which thread the level came from. The
+        // graph has no frame-selection UI of its own, so there's no
+        // popup-driven counterpart to this one.
+        void            setCurrentFrameDepth            (int frameDepth);
+
+        // Sets both at once, restyling the graph in a single pass instead of
+        // two — the counterpart SeerParallelStacksVisualizerWidget::
+        // highlightDirectedGraph() uses, since it always knows both together.
+        void            setCurrentHighlight             (int threadId, int frameDepth);
+
+    signals:
+        // Forwarded from whichever StackBoxItem's popup table had a row selected.
+        void            selectedThread                  (int threadId);
+
     protected:
         void            wheelEvent                      (QWheelEvent* event) override;
         void            keyPressEvent                   (QKeyEvent* event) override;
@@ -227,6 +298,11 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         // Fires while a drag sits near a viewport edge: nudges the scrollbars
         // (and the dragged object) so it keeps following the cursor.
         void            handleAutoScrollTick            ();
+
+        // A thread was selected in some box's popup table. Makes it the
+        // graph's current thread, restyles every box that holds it, and
+        // forwards the selection on via the selectedThread signal.
+        void            handleThreadSelected            (int threadId);
 
     private:
         struct PlacedNode {
@@ -274,6 +350,11 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         // active (i.e. the scene doesn't fully fit in the viewport).
         void            updateMiniMapVisibility     ();
 
+        // Reapplies _currentThreadId's and _currentFrameDepth's highlight to
+        // every box currently in the scene. Called after a setStack()
+        // rebuild and whenever either is set.
+        void            applyCurrentHighlight       ();
+
         QGraphicsScene*                             _scene;
         SeerParallelStacksMiniMapWidget*            _miniMap;
         QString                                     _showMinimapMode = "Auto";
@@ -286,6 +367,9 @@ class SeerParallelStacksGraphicsView : public QGraphicsView {
         QPoint                                      _autoScrollVelocity;        // px/tick, from cursor proximity to the edges
         bool                                        _nodeDragScroll    = false;
         bool                                        _miniMapDragScroll = false;
+
+        int                                         _currentThreadId   = -1;   // the graph's current thread; reset from gdb's real one on every setStack() refresh
+        int                                         _currentFrameDepth = -1;   // the graph's current frame depth(); reset from gdb's real one on every setStack() refresh
 
         friend class SeerParallelStacksMiniMapWidget;    // needs sceneRect()/mapToScene()/centerOn() access
 };
